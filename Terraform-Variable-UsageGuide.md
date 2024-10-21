@@ -122,3 +122,6 @@
    ```
 
 Remember, while variables aren't allowed in these name fields, you can often achieve similar flexibility by using variables within the resource, data source, or module block to set names or other identifying attributes.
+
+This guide should help you understand where you can and cannot use variables in Terraform. The key thing to remember is that resource, data source, module, and provider names need to be static strings in Terraform, but you can often use variables within these blocks to set names or other attributes.
+For your specific case with the security group, you correctly moved the variable from the resource name to the name argument inside the resource block. This is a common pattern when you want to use variables to name resources in AWS (or other providers) while keeping the Terraform resource names static.
