@@ -1,0 +1,98 @@
+# First, here's what our JSON file (app_config.json) looks like:
+---
+# app_config.json
+{
+    "application": {
+        "name": "MyWebApp",
+        "version": "2.0.0",
+        "environment": "production",
+        "features": {
+            "caching": true,
+            "logging": true
+        }
+    },
+    "database": {
+        "host": "db.example.com",
+        "port": 5432,
+        "credentials": {
+            "user": "admin",
+            "password": "secretpass123"
+        },
+        "pools": {
+            "min": 5,
+            "max": 20
+        }
+    },
+    "endpoints": [
+        {
+            "name": "api",
+            "url": "https://api.example.com",
+            "timeout": 30
+        },
+        {
+            "name": "auth",
+            "url": "https://auth.example.com",
+            "timeout": 10
+        }
+    ]
+}
+
+# Now, here's the playbook that reads and uses this JSON:
+---
+- name: Demonstrate JSON file usage in Ansible
+  hosts: all
+  gather_facts: false
+  
+  tasks:
+    # Read the JSON file
+    - name: Load JSON configuration
+      include_vars:
+        file: app_config.json
+        name: app_config
+    
+    # Example tasks using the JSON values
+    - name: Display application details
+      debug:
+        msg: |
+          Application Name: {{ app_config.application.name }}
+          Version: {{ app_config.application.version }}
+          Environment: {{ app_config.application.environment }}
+    
+    # Using nested values
+    - name: Configure database connection
+      template:
+        src: db_config.j2
+        dest: /etc/app/database.conf
+      vars:
+        db_host: "{{ app_config.database.host }}"
+        db_port: "{{ app_config.database.port }}"
+        db_user: "{{ app_config.database.credentials.user }}"
+        db_password: "{{ app_config.database.credentials.password }}"
+    
+    # Working with boolean values from JSON
+    - name: Configure application features
+      template:
+        src: app_features.j2
+        dest: /etc/app/features.conf
+      when: app_config.application.features.caching | bool
+    
+    # Working with arrays/lists from JSON
+    - name: Configure endpoints
+      template:
+        src: endpoint.j2
+        dest: "/etc/app/endpoints/{{ item.name }}.conf"
+      loop: "{{ app_config.endpoints }}"
+      loop_control:
+        label: "{{ item.name }}"
+    
+    # Conditional task based on JSON values
+    - name: Set high-performance pool settings
+      template:
+        src: pool_config.j2
+        dest: /etc/app/pool.conf
+      when: app_config.database.pools.max > 10
+    
+    # Using values in command
+    - name: Start application with configuration
+      command: "app-server start --port {{ app_config.database.port }} --env {{ app_config.application.environment }}"
+      when: app_config.application.environment == 'production'
