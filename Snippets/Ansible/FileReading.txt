@@ -1,0 +1,48 @@
+---
+- name: Demonstrate file reading methods
+  hosts: localhost
+  vars:
+    config_file: "config.txt"
+  
+  tasks:
+    # Method 1: Using lookup plugin to read file content
+    - name: Read file using lookup
+      set_fact:
+        file_content: "{{ lookup('file', config_file) }}"
+      
+    - name: Display file content
+      debug:
+        msg: "Content from lookup: {{ file_content }}"
+    
+    # Method 2: Using slurp module to read and decode file
+    - name: Read file using slurp
+      slurp:
+        src: "{{ config_file }}"
+      register: slurped_content
+    
+    - name: Display slurped content
+      debug:
+        msg: "Content from slurp: {{ slurped_content.content | b64decode }}"
+    
+    # Method 3: Reading file line by line
+    - name: Read file line by line
+      shell: cat "{{ config_file }}"
+      register: file_lines
+    
+    - name: Display lines
+      debug:
+        msg: "Lines: {{ file_lines.stdout_lines }}"
+    
+    # Method 4: Using include_vars to read YAML/JSON files
+    - name: Include vars from YAML file
+      include_vars:
+        file: config.yml
+        name: yaml_content
+    
+    # Example of using the read content in a template
+    - name: Create file using read content
+      template:
+        src: template.j2
+        dest: output.txt
+      vars:
+        template_content: "{{ file_content }}"
