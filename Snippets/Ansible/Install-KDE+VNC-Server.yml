@@ -1,0 +1,122 @@
+---
+- name: Setup Debian with KDE and VNC
+  hosts: XXXX
+  become: yes
+  vars:
+     new_user: ubuntu
+#    user_password: Test123
+     vnc_password: Test123
+
+  tasks:
+    # Ensure Python is available for Ansible
+    - name: Install Python
+      raw: test -e /usr/bin/python3 || (apt -y update && apt install -y python3)
+      args:
+        executable: /bin/bash
+
+    # Update system packages
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+#    # Create new user
+#    - name: Create user Albert
+#      user:
+#        name: "{{ new_user }}"
+#        password: "{{ user_password | password_hash('sha512') }}"
+#        shell: /bin/bash
+#        groups: sudo
+#        append: yes
+
+#    # Configure sudo access
+#    - name: Ensure sudo group has passwordless sudo
+#      lineinfile:
+#        path: /etc/sudoers
+#        state: present
+#        regexp: '^%sudo'
+#        line: '%sudo ALL=(ALL:ALL) ALL'
+#        validate: 'visudo -cf %s'
+
+    # Install KDE minimal
+    - name: Install KDE minimal desktop
+      apt:
+        name:
+          - kde-plasma-desktop
+          - sddm
+        state: present
+
+    # Install TigerVNC
+    - name: Install TigerVNC server
+      apt:
+        name:
+          - tigervnc-standalone-server
+          - tigervnc-common
+        state: present
+
+    # Create VNC directory
+    - name: Create VNC directory for Albert
+      file:
+        path: "/home/{{ new_user }}/.vnc"
+        state: directory
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: '0755'
+
+    # Set VNC password
+    - name: Set VNC password for Albert
+      shell: |
+        echo "{{ vnc_password }}" | vncpasswd -f > "/home/{{ new_user }}/.vnc/passwd"
+      args:
+        creates: "/home/{{ new_user }}/.vnc/passwd"
+
+    # Set correct permissions for VNC password file
+    - name: Set permissions for VNC password file
+      file:
+        path: "/home/{{ new_user }}/.vnc/passwd"
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: '0600'
+
+    # Create VNC xstartup file
+    - name: Create VNC xstartup file
+      copy:
+        dest: "/home/{{ new_user }}/.vnc/xstartup"
+        owner: "{{ new_user }}"
+        group: "{{ new_user }}"
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec startplasma-x11
+
+    # Create systemd service for VNC
+    - name: Create VNC systemd service
+      copy:
+        dest: "/etc/systemd/system/vncserver@.service"
+        content: |
+          [Unit]
+          Description=Remote desktop service (VNC)
+          After=syslog.target network.target
+
+          [Service]
+          Type=forking
+          User={{ new_user }}
+          WorkingDirectory=/home/{{ new_user }}
+          
+          PIDFile=/home/{{ new_user }}/.vnc/%H:%i.pid
+          ExecStartPre=-/bin/sh -c '/usr/bin/vncserver -kill :%i > /dev/null 2>&1'
+          ExecStart=/usr/bin/vncserver :%i -geometry 1920x1080 -depth 24
+          ExecStop=/usr/bin/vncserver -kill :%i
+          
+          [Install]
+          WantedBy=multi-user.target
+
+    # Enable and start VNC service
+    - name: Enable VNC service
+      systemd:
+        name: vncserver@1.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
