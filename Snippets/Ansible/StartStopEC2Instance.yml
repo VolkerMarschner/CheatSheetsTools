@@ -1,0 +1,20 @@
+# Start instance
+- name: Start EC2 instance
+  amazon.aws.ec2_instance:
+    instance_ids: i-12345678
+    state: started
+    region: eu-central-1
+
+# Stop instance
+- name: Stop EC2 instance
+  amazon.aws.ec2_instance:
+    instance_ids: i-12345678
+    state: stopped
+    region: eu-central-1
+
+ansible-playbook start_ec2.yml
+
+Alternative für schnelle Ad-hoc Aktionen:
+AWS CLI:
+aws ec2 start-instances --instance-ids i-12345678
+aws ec2 stop-instances --instance-ids i-12345678
