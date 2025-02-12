@@ -1,0 +1,89 @@
+---
+- name: Install ComfyUI with NVIDIA support
+  hosts: all
+  become: yes
+  vars:
+    comfyui_path: /opt/comfyui
+    models_path: "{{ comfyui_path }}/models"
+    python_version: "3.12"  # As recommended in the docs
+    cuda_version: "12.6"    # Latest supported CUDA version
+
+  tasks:
+    - name: Install system dependencies
+      apt:
+        name:
+          - git
+          - python{{ python_version }}
+          - python3-pip
+          - python3-venv
+          - nvidia-cuda-toolkit
+        update_cache: yes
+        state: present
+
+    - name: Create ComfyUI directory
+      file:
+        path: "{{ comfyui_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone ComfyUI repository
+      git:
+        repo: https://github.com/comfyanonymous/ComfyUI.git
+        dest: "{{ comfyui_path }}"
+        version: master
+
+    - name: Create Python virtual environment
+      command: python{{ python_version }} -m venv "{{ comfyui_path }}/venv"
+      args:
+        creates: "{{ comfyui_path }}/venv"
+
+    - name: Install PyTorch with CUDA support
+      pip:
+        name: torch torchvision torchaudio
+        extra_args: --extra-index-url https://download.pytorch.org/whl/cu{{ cuda_version | replace('.', '') }}
+        virtualenv: "{{ comfyui_path }}/venv"
+        state: present
+
+    - name: Install ComfyUI requirements
+      pip:
+        requirements: "{{ comfyui_path }}/requirements.txt"
+        virtualenv: "{{ comfyui_path }}/venv"
+        state: present
+
+    - name: Create model directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ models_path }}/checkpoints"
+        - "{{ models_path }}/vae"
+        - "{{ models_path }}/embeddings"
+        - "{{ models_path }}/vae_approx"
+
+    # Optional: Install TAESD for high-quality previews
+    - name: Download TAESD models for high-quality previews
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ models_path }}/vae_approx/{{ item.file }}"
+        mode: '0644'
+      loop:
+        - { url: "https://github.com/madebyollin/taesd/raw/main/taesd_decoder.pth", file: "taesd_decoder.pth" }
+        - { url: "https://github.com/madebyollin/taesd/raw/main/taesdxl_decoder.pth", file: "taesdxl_decoder.pth" }
+        - { url: "https://github.com/madebyollin/taesd/raw/main/taesd3_decoder.pth", file: "taesd3_decoder.pth" }
+        - { url: "https://github.com/madebyollin/taesd/raw/main/taef1_decoder.pth", file: "taef1_decoder.pth" }
+
+    - name: Create systemd service
+      template:
+        src: comfyui.service.j2
+        dest: /etc/systemd/system/comfyui.service
+        mode: '0644'
+      notify: Restart ComfyUI service
+
+  handlers:
+    - name: Restart ComfyUI service
+      systemd:
+        name: comfyui
+        state: restarted
+        daemon_reload: yes
+        enabled: yes
