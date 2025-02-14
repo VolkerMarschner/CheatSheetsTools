@@ -1,0 +1,71 @@
+---
+- name: Install Docker and deploy Syncthing
+  hosts: all
+  become: true
+  vars:
+    compose_path: "/opt/docker/syncthing"  # Hier den gewünschten Pfad anpassen
+    
+  tasks:
+    - name: Install required system packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create required directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+      loop:
+        - "{{ compose_path }}"
+        - "{{ compose_path }}/config"
+        - "{{ compose_path }}/data1"
+        - "{{ compose_path }}/data2"
+
+    - name: Create docker-compose.yml
+      template:
+        src: docker-compose.yml.j2
+        dest: "{{ compose_path }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Deploy Syncthing container
+      community.docker.docker_compose:
+        project_src: "{{ compose_path }}"
+        state: present
